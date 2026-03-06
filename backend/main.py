@@ -145,3 +145,29 @@ def get_critical_path(db: Session = Depends(get_db)):
         "total_sprint_hours": cp_data["total_hours"],
         "critical_path": critical_tasks
     }
+
+@app.get("/project/priorities")
+def get_prioritized_tasks(db: Session = Depends(get_db)):
+    all_tasks = db.query(models.Task).all()
+    
+    # Calculate priorities
+    priorities = graph_engine.get_task_priorities(all_tasks)
+    
+    result = []
+    for task in all_tasks:
+        result.append({
+            "id": task.id,
+            "title": task.title,
+            "priority": priorities.get(task.id, "Normal"),
+            "estimated_hours": task.estimated_hours,
+            "is_ready": task.is_ready
+        })
+        
+    # Sort the tasks
+    priority_weights = {"Critical (Bottleneck)": 1, "High (Blocker)": 2, "Normal": 3}
+    result.sort(key=lambda x: priority_weights.get(x["priority"], 3))
+    
+    return {
+        "status": "success",
+        "prioritized_tasks": result
+    }

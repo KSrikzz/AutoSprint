@@ -61,3 +61,19 @@ def calculate_critical_path(tasks):
         "critical_path_ids": path,
         "total_hours": total_hours
     }
+
+def get_task_priorities(tasks):
+    G = build_dag_from_tasks(tasks)
+    cp_data = calculate_critical_path(tasks)
+    critical_set = set(cp_data["critical_path_ids"])
+
+    priorities = {}
+    for node in G.nodes():
+        if node in critical_set:
+            priorities[node] = "Critical (Bottleneck)"
+        elif G.out_degree(node) > 0: # The task is blocking at least one other task
+            priorities[node] = "High (Blocker)"
+        else:
+            priorities[node] = "Normal"
+            
+    return priorities
