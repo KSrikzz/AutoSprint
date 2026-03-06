@@ -25,3 +25,39 @@ def creates_cycle(tasks, task_id, prerequisite_id):
         return True
     
     return False
+
+def calculate_critical_path(tasks):
+    G = build_dag_from_tasks(tasks)
+    
+    if not G.nodes:
+        return {"critical_path_ids": [], "total_hours": 0}
+        
+    eft = {}
+    predecessors = {}
+
+    for node in nx.topological_sort(G):
+        duration = G.nodes[node].get('duration', 0)
+        
+        max_pred_eft = 0
+        best_pred = None
+        for pred in G.predecessors(node):
+            if eft[pred] > max_pred_eft:
+                max_pred_eft = eft[pred]
+                best_pred = pred
+                
+        eft[node] = max_pred_eft + duration
+        predecessors[node] = best_pred
+
+    last_task = max(eft, key=eft.get)
+    total_hours = eft[last_task]
+
+    path = []
+    current = last_task
+    while current is not None:
+        path.insert(0, current)
+        current = predecessors[current]
+
+    return {
+        "critical_path_ids": path,
+        "total_hours": total_hours
+    }

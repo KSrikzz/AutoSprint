@@ -123,3 +123,25 @@ def add_dependency(task_id: int, prereq_id: int, db: Session = Depends(get_db)):
         "status": "success", 
         "message": f"Task {prereq_id} '{prereq.title}' is now a strict prerequisite for Task {task_id} '{task.title}'"
     }
+
+@app.get("/project/critical-path")
+def get_critical_path(db: Session = Depends(get_db)):
+    all_tasks = db.query(models.Task).all()
+    
+    cp_data = graph_engine.calculate_critical_path(all_tasks)
+    
+    critical_tasks = []
+    for task_id in cp_data["critical_path_ids"]:
+        task = db.query(models.Task).filter(models.Task.id == task_id).first()
+        if task:
+            critical_tasks.append({
+                "id": task.id,
+                "title": task.title,
+                "estimated_hours": task.estimated_hours
+            })
+            
+    return {
+        "status": "success",
+        "total_sprint_hours": cp_data["total_hours"],
+        "critical_path": critical_tasks
+    }
