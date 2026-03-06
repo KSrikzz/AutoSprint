@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # 1. Database Layer
+  db:
+    image: postgres:15-alpine
+    container_name: autosprint_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: REDACTED
+      POSTGRES_DB: autosprint
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. AI Layer
+  ollama:
+    image: ollama/ollama
+    container_name: autosprint_ai
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  # 3. Backend Layer
+  backend:
+    build: ./backend
+    container_name: autosprint_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - ollama
+    environment:
+      - DATABASE_URL=postgresql://admin:REDACTED@db:5432/autosprint
+      - OLLAMA_URL=http://ollama:11434
+    volumes:
+      - ./backend:/app
+
+  # 4. Frontend Layer
+  frontend:
+    build: ./frontend
+    container_name: autosprint_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  ollama_data:
