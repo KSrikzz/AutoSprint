@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
+import models
+from database import engine, get_db
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="AutoSprint API",
@@ -17,3 +22,11 @@ def health_check():
         "status": "success",
         "message": "AutoSprint FastAPI backend is up and running!"
     }
+
+@app.get("/db-check")
+def db_check(db: Session = Depends(get_db)):
+    try:
+        db.execute("SELECT 1")
+        return {"status": "success", "message": "Successfully connected to PostgreSQL!"}
+    except Exception as e:
+        return {"status": "error", "message": f"Database connection failed: {str(e)}"}
