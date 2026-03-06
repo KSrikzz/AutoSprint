@@ -2,11 +2,13 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import List
 import models
 import schemas
 import graph_engine
 from database import engine, get_db
 
+# Create tables on startup
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -15,9 +17,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Permissive CORS to prevent browser blocks during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,79 +32,50 @@ class HealthResponse(BaseModel):
 
 @app.get("/", response_model=HealthResponse)
 def health_check():
-    return {
-        "status": "success",
-        "message": "AutoSprint FastAPI backend is up and running!"
-    }
+    return {"status": "success", "message": "AutoSprint backend is operational."}
 
-@app.get("/db-check")
-def db_check(db: Session = Depends(get_db)):
-    try:
-        db.execute("SELECT 1")
-        return {"status": "success", "message": "Successfully connected to PostgreSQL!"}
-    except Exception as e:
-        return {"status": "error", "message": f"Database connection failed: {str(e)}"}
-    
 # ==========================================
-# CRUD ENDPOINTS FOR TASKS
+# TASK OPERATIONS
 # ==========================================
 
-# 1. CREATE a new task
 @app.post("/tasks/", response_model=schemas.Task)
 def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
-    # Convert Pydantic schema to SQLAlchemy model dictionary
     db_task = models.Task(**task.model_dump())
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
     return db_task
 
-# 2. READ all tasks
-@app.get("/tasks/", response_model=list[schemas.Task])
+@app.get("/tasks/", response_model=List[schemas.Task])
 def read_tasks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    tasks = db.query(models.Task).offset(skip).limit(limit).all()
-    return tasks
+    return db.query(models.Task).offset(skip).limit(limit).all()
 
-# 3. READ a single task by ID
-@app.get("/tasks/{task_id}", response_model=schemas.Task)
-def read_task(task_id: int, db: Session = Depends(get_db)):
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
-
-# 4. UPDATE a task
-@app.put("/tasks/{task_id}", response_model=schemas.Task)
-def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(get_db)):
-    db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if db_task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    for key, value in task.model_dump().items():
-        setattr(db_task, key, value)
-        
-    db.commit()
-    db.refresh(db_task)
-    return db_task
-
-# 5. DELETE a task
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if db_task is None:
+    if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
     db.delete(db_task)
     db.commit()
-    return {"status": "success", "message": f"Task {task_id} deleted successfully"}
+    return {"status": "success", "message": f"Task {task_id} deleted."}
+
+@app.patch("/tasks/{task_id}/complete")
+def complete_task(task_id: int, db: Session = Depends(get_db)):
+    db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    db_task.status = "Done"
+    db.commit()
+    db.refresh(db_task)
+    return {"status": "success", "message": f"Task '{db_task.title}' marked as Done."}
 
 # ==========================================
-# DEPENDENCY & GRAPH ENDPOINTS
+# PROJECT INTELLIGENCE (GRAPH)
 # ==========================================
 
 @app.post("/tasks/{task_id}/dependencies/{prereq_id}")
 def add_dependency(task_id: int, prereq_id: int, db: Session = Depends(get_db)):
-    # 1. Basic validation
     if task_id == prereq_id:
         raise HTTPException(status_code=400, detail="A task cannot depend on itself.")
 
@@ -111,72 +85,60 @@ def add_dependency(task_id: int, prereq_id: int, db: Session = Depends(get_db)):
     if not task or not prereq:
         raise HTTPException(status_code=404, detail="Task or prerequisite not found.")
 
-    if prereq in task.prerequisites:
-        return {"message": "Dependency already exists."}
-
-    # 2. Graph Engine Validation (Cycle Detection)
     all_tasks = db.query(models.Task).all()
-    
     if graph_engine.creates_cycle(all_tasks, task_id, prereq_id):
-        # If invalid: Reject output
-        raise HTTPException(
-            status_code=400, 
-            detail="Invalid execution path: This dependency creates a cycle in the DAG!"
-        )
+        raise HTTPException(status_code=400, detail="Dependency creates a cycle!")
 
-    # 3. Save the valid dependency
     task.prerequisites.append(prereq)
     db.commit()
-
-    return {
-        "status": "success", 
-        "message": f"Task {prereq_id} '{prereq.title}' is now a strict prerequisite for Task {task_id} '{task.title}'"
-    }
+    return {"status": "success", "message": "Dependency established."}
 
 @app.get("/project/critical-path")
 def get_critical_path(db: Session = Depends(get_db)):
-    all_tasks = db.query(models.Task).all()
-    
-    cp_data = graph_engine.calculate_critical_path(all_tasks)
-    
-    critical_tasks = []
-    for task_id in cp_data["critical_path_ids"]:
-        task = db.query(models.Task).filter(models.Task.id == task_id).first()
-        if task:
-            critical_tasks.append({
-                "id": task.id,
-                "title": task.title,
-                "estimated_hours": task.estimated_hours
-            })
-            
-    return {
-        "status": "success",
-        "total_sprint_hours": cp_data["total_hours"],
-        "critical_path": critical_tasks
-    }
+    try:
+        active_tasks = db.query(models.Task).filter(models.Task.status != "Done").all()
+        
+        if not active_tasks:
+            return {"status": "success", "total_sprint_hours": 0, "critical_path_ids": []}
+
+        cp_data = graph_engine.calculate_critical_path(active_tasks)
+        
+        return {
+            "status": "success",
+            "total_sprint_hours": cp_data.get("total_hours", 0),
+            "critical_path_ids": cp_data.get("critical_path_ids", [])
+        }
+    except Exception as e:
+        print(f"Graph Engine Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Graph Engine Error")
 
 @app.get("/project/priorities")
 def get_prioritized_tasks(db: Session = Depends(get_db)):
-    all_tasks = db.query(models.Task).all()
-    
-    # Calculate priorities
-    priorities = graph_engine.get_task_priorities(all_tasks)
-    
-    result = []
-    for task in all_tasks:
-        result.append({
-            "id": task.id,
-            "title": task.title,
-            "priority": priorities.get(task.id, "Normal"),
-            "estimated_hours": task.estimated_hours,
-            "is_ready": task.is_ready
-        })
+    try:
+        all_tasks = db.query(models.Task).all()
+        if not all_tasks:
+            return {"status": "success", "prioritized_tasks": []}
+            
+        active_tasks = [t for t in all_tasks if t.status != "Done"]
+        priorities = graph_engine.get_task_priorities(active_tasks)
         
-    # Sort the tasks
-    priority_weights = {"Critical (Bottleneck)": 1, "High (Blocker)": 2, "Normal": 3}
-    result.sort(key=lambda x: priority_weights.get(x["priority"], 3))
-    
-    return {
-        "status": "success",
-        "prioritized_tasks": result
-    }
+        result = []
+        for task in all_tasks:
+            is_ready = all(p.status == "Done" for p in task.prerequisites)
+            
+            result.append({
+                "id": task.id,
+                "title": task.title,
+                "priority": priorities.get(task.id, "Normal") if task.status != "Done" else "Completed",
+                "estimated_hours": task.estimated_hours,
+                "status": task.status,
+                "is_ready": is_ready
+            })
+            
+        priority_weights = {"Critical (Bottleneck)": 1, "High (Blocker)": 2, "Normal": 3, "Completed": 4}
+        result.sort(key=lambda x: (x["status"] == "Done", priority_weights.get(x["priority"], 3)))
+        
+        return {"status": "success", "prioritized_tasks": result}
+    except Exception as e:
+        print(f"Priority Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Calculation Error")

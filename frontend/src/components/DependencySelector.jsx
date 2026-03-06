@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchPrioritizedTasks, addDependency } from '../services/api';
+import { fetchPrioritizedTasks, createDependency } from '../services/api';
 
 const DependencySelector = ({ onDependencyAdded }) => {
   const [tasks, setTasks] = useState([]);
@@ -30,7 +30,6 @@ const DependencySelector = ({ onDependencyAdded }) => {
       setPrereqId('');
       if (onDependencyAdded) onDependencyAdded();
     } catch (err) {
-      // Catch cycle detection errors from FastAPI
       setError(err.response?.data?.detail || "Failed to link tasks.");
     }
   };

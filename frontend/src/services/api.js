@@ -10,10 +10,13 @@ API.interceptors.response.use(
   (error) => Promise.reject(error)
 );
 
+export const fetchTasks = () => API.get('/tasks/');
+export const createTask = (taskData) => API.post('/tasks/', taskData);
+export const deleteTask = (taskId) => API.delete(`/tasks/${taskId}`);
+export const completeTask = (taskId) => API.patch(`/tasks/${taskId}/complete`);
 export const fetchPrioritizedTasks = () => API.get('/project/priorities');
 export const fetchCriticalPath = () => API.get('/project/critical-path');
-export const createTask = (taskData) => API.post('/tasks/', taskData);
-export const addDependency = (taskId, prereqId) => 
+export const createDependency = (taskId, prereqId) => 
   API.post(`/tasks/${taskId}/dependencies/${prereqId}`);
 
 export default API;
