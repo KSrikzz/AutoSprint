@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import models
 import schemas
+import graph_engine
 from database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
@@ -84,3 +85,41 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.delete(db_task)
     db.commit()
     return {"status": "success", "message": f"Task {task_id} deleted successfully"}
+
+# ==========================================
+# DEPENDENCY & GRAPH ENDPOINTS
+# ==========================================
+
+@app.post("/tasks/{task_id}/dependencies/{prereq_id}")
+def add_dependency(task_id: int, prereq_id: int, db: Session = Depends(get_db)):
+    # 1. Basic validation
+    if task_id == prereq_id:
+        raise HTTPException(status_code=400, detail="A task cannot depend on itself.")
+
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    prereq = db.query(models.Task).filter(models.Task.id == prereq_id).first()
+
+    if not task or not prereq:
+        raise HTTPException(status_code=404, detail="Task or prerequisite not found.")
+
+    if prereq in task.prerequisites:
+        return {"message": "Dependency already exists."}
+
+    # 2. Graph Engine Validation (Cycle Detection)
+    all_tasks = db.query(models.Task).all()
+    
+    if graph_engine.creates_cycle(all_tasks, task_id, prereq_id):
+        # If invalid: Reject output
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid execution path: This dependency creates a cycle in the DAG!"
+        )
+
+    # 3. Save the valid dependency
+    task.prerequisites.append(prereq)
+    db.commit()
+
+    return {
+        "status": "success", 
+        "message": f"Task {prereq_id} '{prereq.title}' is now a strict prerequisite for Task {task_id} '{task.title}'"
+    }
