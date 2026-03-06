@@ -47,7 +47,9 @@ function App() {
               totalHours={data.totalHours} 
               onAction={refreshDashboard} 
             />
-            <DependencySelector onDependencyAdded={refreshDashboard} />
+            <DependencySelector 
+            tasks={data.tasks}
+            onDependencyAdded={refreshDashboard} />
           </div>
 
           <div className="sticky top-8">
