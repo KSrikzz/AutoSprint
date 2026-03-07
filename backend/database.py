@@ -1,5 +1,6 @@
 import os
 import time
+import sys
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import OperationalError
@@ -16,6 +17,8 @@ engine = create_engine(
 )
 
 def wait_for_db(engine, retries=10, interval=3):
+    if "alembic" in sys.argv[0]:
+        return
     print("⏳ Connecting to PostgreSQL...")
     while retries > 0:
         try:

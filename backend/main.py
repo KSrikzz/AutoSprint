@@ -8,8 +8,6 @@ import schemas
 import graph_engine
 from database import engine, get_db
 
-# Create tables on startup
-models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="AutoSprint API",

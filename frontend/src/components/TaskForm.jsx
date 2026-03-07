@@ -28,7 +28,7 @@ const TaskForm = ({ onTaskAdded }) => {
         <input
           type="text"
           placeholder="What needs to be done?"
-          className="flex-grow p-2 border rounded-md focus:ring-2 focus:ring-slate-900 outline-none"
+          className="grow p-2 border rounded-md focus:ring-2 focus:ring-slate-900 outline-none"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required

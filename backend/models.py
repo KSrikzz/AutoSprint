@@ -17,6 +17,8 @@ class Task(Base):
     estimated_hours = Column(Integer, default=1)
     status = Column(String, default="Todo")
     is_ready = Column(Boolean, default=True)
+    category = Column(String, nullable=True, default="General")
+    priority = Column(Integer, default=1)
 
     prerequisites = relationship(
         "Task",

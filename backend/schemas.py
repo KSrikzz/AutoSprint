@@ -6,6 +6,8 @@ class TaskBase(BaseModel):
     estimated_hours: int = 1
     status: str = "Todo"
     is_ready: bool = True
+    category: Optional[str] = "General"
+    priority: int = 1
 
 class TaskCreate(TaskBase):
     pass
