@@ -5,10 +5,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import OperationalError
 
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://admin:REDACTED@db:5432/autosprint"
-)
+SQLALCHEMY_DATABASE_URL = os.environ["DATABASE_URL"]
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

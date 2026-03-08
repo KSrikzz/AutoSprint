@@ -25,7 +25,11 @@ async def analyze_task_ai(title: str, description: str = ""):
                 "format": "json"
             })
             result = response.json()
-            return json.loads(result["response"])
+            try:
+                return json.loads(result["response"])
+            except json.JSONDecodeError:
+                print(f"AI JSON parse error: {result['response']}")
+                return {"category": "General", "priority": 1, "estimated_hours": 1}
     except Exception as e:
         print(f"AI Service Error: {e}")
         return {"category": "General", "priority": 1, "estimated_hours": 1}

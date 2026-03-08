@@ -7,6 +7,7 @@ from ai_service import analyze_task_ai
 import models
 import schemas
 import graph_engine
+import os
 from database import engine, get_db
 
 
@@ -19,7 +20,7 @@ app = FastAPI(
 # Permissive CORS to prevent browser blocks during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[os.getenv("CORS_ORIGIN", "http://localhost:3000")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
