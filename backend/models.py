@@ -14,6 +14,7 @@ class Task(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
+    description = Column(String, nullable=True)
     estimated_hours = Column(Integer, default=1)
     status = Column(String, default="Todo")
     is_ready = Column(Boolean, default=True)

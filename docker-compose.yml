@@ -44,7 +44,7 @@ services:
         condition: service_started
     environment:
       - DATABASE_URL=postgresql://admin:REDACTED@db:5432/autosprint
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_URL=http://ollama:11434/api/generate
     volumes:
       - ./backend:/app
 

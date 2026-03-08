@@ -3,6 +3,7 @@ from typing import Optional, List
 
 class TaskBase(BaseModel):
     title: str
+    description: Optional[str] = None
     estimated_hours: int = 1
     status: str = "Todo"
     is_ready: bool = True
@@ -14,4 +15,6 @@ class TaskCreate(TaskBase):
 
 class Task(TaskBase):
     id: int
-    model_config = ConfigDict(from_attributes=True)
+    
+    class Config:
+        from_attributes = True

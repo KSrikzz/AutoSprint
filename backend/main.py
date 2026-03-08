@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List
+from ai_service import analyze_task_ai
 import models
 import schemas
 import graph_engine
@@ -37,8 +38,16 @@ def health_check():
 # ==========================================
 
 @app.post("/tasks/", response_model=schemas.Task)
-def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
-    db_task = models.Task(**task.model_dump())
+async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
+    ai_suggestions = await analyze_task_ai(task.title, task.description or "")
+    
+    task_data = task.model_dump()
+    if not task_data.get("category"):
+        task_data["category"] = ai_suggestions.get("category")
+    if not task_data.get("priority"):
+        task_data["priority"] = ai_suggestions.get("priority")
+
+    db_task = models.Task(**task_data)
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
