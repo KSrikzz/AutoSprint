@@ -1,12 +1,12 @@
 import React from 'react';
 import { deleteTask, completeTask } from '../services/api';
+import TaskCard from './TaskCard';
 
 const TaskList = ({ tasks, criticalIds, totalHours, onAction }) => {
   const handleAction = async (action, id, title) => {
     const message = action === 'delete' 
       ? `🗑️ Permanent: Delete "${title}"?` 
       : `✅ Mark "${title}" as completed?`;
-    
     if (!window.confirm(message)) return;
 
     try {
