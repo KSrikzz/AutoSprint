@@ -14,9 +14,14 @@ export const fetchTasks = () => API.get('/tasks/');
 export const createTask = (taskData) => API.post('/tasks/', taskData);
 export const deleteTask = (taskId) => API.delete(`/tasks/${taskId}`);
 export const completeTask = (taskId) => API.patch(`/tasks/${taskId}/complete`);
+
 export const fetchPrioritizedTasks = () => API.get('/project/priorities');
 export const fetchCriticalPath = () => API.get('/project/critical-path');
-export const createDependency = (taskId, prereqId) => 
-  API.post(`/tasks/${taskId}/dependencies/${prereqId}`);
+
+export const createDependency = (taskId, dependsOnId) => 
+  API.post(`/dependencies/`, { 
+    task_id: taskId, 
+    depends_on_id: dependsOnId 
+  });
 
 export default API;

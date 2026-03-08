@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List
-from ai_service import analyze_task_ai
 import models
 import schemas
 import graph_engine
 import os
-from database import engine, get_db
+from database import get_db
+from ai_service import analyze_task_ai
+from project_service import calculate_critical_path
 
 
 app = FastAPI(
@@ -43,10 +44,10 @@ async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
     ai_suggestions = await analyze_task_ai(task.title, task.description or "")
     
     task_data = task.model_dump()
-    if not task_data.get("category"):
-        task_data["category"] = ai_suggestions.get("category")
-    if not task_data.get("priority"):
-        task_data["priority"] = ai_suggestions.get("priority")
+    if not task_data.get("estimated_hours") or task_data.get("estimated_hours") == 1:
+        task_data["estimated_hours"] = ai_suggestions.get("estimated_hours", 1)
+    task_data["category"] = ai_suggestions.get("category", "General")
+    task_data["priority"] = ai_suggestions.get("priority", 1)
 
     db_task = models.Task(**task_data)
     db.add(db_task)
@@ -67,7 +68,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success", "message": f"Task {task_id} deleted."}
 
-@app.patch("/tasks/{task_id}/complete")
+@app.patch("/tasks/{task_id}/complete", response_model=schemas.Task)
 def complete_task(task_id: int, db: Session = Depends(get_db)):
     db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not db_task:
@@ -76,77 +77,39 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
     db_task.status = "Done"
     db.commit()
     db.refresh(db_task)
-    return {"status": "success", "message": f"Task '{db_task.title}' marked as Done."}
+    return db_task
 
 # ==========================================
 # PROJECT INTELLIGENCE (GRAPH)
 # ==========================================
 
-@app.post("/tasks/{task_id}/dependencies/{prereq_id}")
-def add_dependency(task_id: int, prereq_id: int, db: Session = Depends(get_db)):
-    if task_id == prereq_id:
-        raise HTTPException(status_code=400, detail="A task cannot depend on itself.")
-
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
-    prereq = db.query(models.Task).filter(models.Task.id == prereq_id).first()
-
-    if not task or not prereq:
-        raise HTTPException(status_code=404, detail="Task or prerequisite not found.")
-
-    all_tasks = db.query(models.Task).all()
-    if graph_engine.creates_cycle(all_tasks, task_id, prereq_id):
-        raise HTTPException(status_code=400, detail="Dependency creates a cycle!")
-
-    task.prerequisites.append(prereq)
-    db.commit()
-    return {"status": "success", "message": "Dependency established."}
-
-@app.get("/project/critical-path")
+@app.get("/project/critical-path", response_model=List[schemas.Task])
 def get_critical_path(db: Session = Depends(get_db)):
+    """Calculates the sequence of tasks determining the project duration"""
     try:
-        active_tasks = db.query(models.Task).filter(models.Task.status != "Done").all()
-        
-        if not active_tasks:
-            return {"status": "success", "total_sprint_hours": 0, "critical_path_ids": []}
-
-        cp_data = graph_engine.calculate_critical_path(active_tasks)
-        
-        return {
-            "status": "success",
-            "total_sprint_hours": cp_data.get("total_hours", 0),
-            "critical_path_ids": cp_data.get("critical_path_ids", [])
-        }
+        path = calculate_critical_path(db)
+        return path if path else []
     except Exception as e:
         print(f"Graph Engine Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Graph Engine Error")
+        raise HTTPException(status_code=500, detail="Error calculating project bottleneck.")
 
-@app.get("/project/priorities")
+@app.get("/project/priorities", response_model=List[schemas.Task])
 def get_prioritized_tasks(db: Session = Depends(get_db)):
+    """Returns tasks sorted by AI-generated risk priority"""
     try:
-        all_tasks = db.query(models.Task).all()
-        if not all_tasks:
-            return {"status": "success", "prioritized_tasks": []}
-            
-        active_tasks = [t for t in all_tasks if t.status != "Done"]
-        priorities = graph_engine.get_task_priorities(active_tasks)
-        
-        result = []
-        for task in all_tasks:
-            is_ready = all(p.status == "Done" for p in task.prerequisites)
-            
-            result.append({
-                "id": task.id,
-                "title": task.title,
-                "priority": priorities.get(task.id, "Normal") if task.status != "Done" else "Completed",
-                "estimated_hours": task.estimated_hours,
-                "status": task.status,
-                "is_ready": is_ready
-            })
-            
-        priority_weights = {"Critical (Bottleneck)": 1, "High (Blocker)": 2, "Normal": 3, "Completed": 4}
-        result.sort(key=lambda x: (x["status"] == "Done", priority_weights.get(x["priority"], 3)))
-        
-        return {"status": "success", "prioritized_tasks": result}
+        return db.query(models.Task).order_by(models.Task.priority.desc()).all()
     except Exception as e:
-        print(f"Priority Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Calculation Error")
+        print(f"Priority Route Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database sync error while fetching priorities.")
+
+@app.post("/dependencies/", response_model=schemas.TaskDependency)
+def create_dependency(dep: schemas.TaskDependencyCreate, db: Session = Depends(get_db)):
+    """Establishes relationship links between tasks"""
+    if dep.task_id == dep.depends_on_id:
+        raise HTTPException(status_code=400, detail="A task cannot block itself.")
+    
+    db_dep = models.TaskDependency(**dep.model_dump())
+    db.add(db_dep)
+    db.commit()
+    db.refresh(db_dep)
+    return db_dep

@@ -11,7 +11,6 @@ const TaskCard = ({ task, isCritical, handleAction }) => {
       
       <div className="grow pr-4">
         <div className="flex items-center gap-2 mb-1">
-          {/* AI Generated Category Badge */}
           <span className="bg-slate-900 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">
             {task.category || 'General'}
           </span>

@@ -1,17 +1,9 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
 
-task_dependencies = Table(
-    "task_dependencies",
-    Base.metadata,
-    Column("task_id", Integer, ForeignKey("tasks.id"), primary_key=True),
-    Column("prerequisite_id", Integer, ForeignKey("tasks.id"), primary_key=True),
-)
-
 class Task(Base):
     __tablename__ = "tasks"
-
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(String, nullable=True)
@@ -21,10 +13,18 @@ class Task(Base):
     category = Column(String, nullable=True, default="General")
     priority = Column(Integer, default=1)
 
-    prerequisites = relationship(
+    dependencies = relationship(
         "Task",
-        secondary=task_dependencies,
-        primaryjoin=id == task_dependencies.c.task_id,
-        secondaryjoin=id == task_dependencies.c.prerequisite_id,
+        secondary="task_dependencies",
+        primaryjoin="Task.id==TaskDependency.task_id",
+        secondaryjoin="Task.id==TaskDependency.depends_on_id",
         backref="blocked_tasks"
     )
+
+class TaskDependency(Base):
+    __tablename__ = "task_dependencies"
+    __table_args__ = {'extend_existing': True}
+    
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    depends_on_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)

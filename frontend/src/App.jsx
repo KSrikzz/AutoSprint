@@ -7,17 +7,22 @@ import { fetchPrioritizedTasks, fetchCriticalPath } from './services/api';
 
 function App() {
   const [data, setData] = useState({ tasks: [], criticalIds: [], totalHours: 0 });
+
   const refreshDashboard = useCallback(async () => {
     try {
-      const [priorityRes, criticalRes] = await Promise.all([
+      const [tasksRes, criticalRes] = await Promise.all([
         fetchPrioritizedTasks(),
         fetchCriticalPath()
       ]);
       
+    const tasks = Array.isArray(tasksRes) ? tasksRes : [];
+    const criticalPath = Array.isArray(criticalRes) ? criticalRes : [];
+    const activeTasks = tasks.filter(t => t.status !== "Done");
+
       setData({
-        tasks: priorityRes?.prioritized_tasks || [],
-        criticalIds: criticalRes?.critical_path_ids || [],
-        totalHours: criticalRes?.total_sprint_hours || 0
+        tasks: tasks,
+        criticalIds: criticalPath.map(t => t.id),
+        totalHours: activeTasks.reduce((acc, t) => acc + (Number(t.estimated_hours) || 0), 0)
       });
     } catch (err) {
       console.error("Dashboard Sync Error:", err);
@@ -40,7 +45,6 @@ function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="space-y-8">
-            {/* TaskList now strictly receives data and triggers the refresh */}
             <TaskList 
               tasks={data.tasks} 
               criticalIds={data.criticalIds} 
@@ -48,12 +52,12 @@ function App() {
               onAction={refreshDashboard} 
             />
             <DependencySelector 
-            tasks={data.tasks}
-            onDependencyAdded={refreshDashboard} />
+              tasks={data.tasks}
+              onDependencyAdded={refreshDashboard} 
+            />
           </div>
 
           <div className="sticky top-8">
-            {/* RiskMap automatically updates when data.tasks changes */}
             <RiskMap tasks={data.tasks} />
           </div>
         </div>

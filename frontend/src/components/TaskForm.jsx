@@ -3,51 +3,61 @@ import { createTask } from '../services/api';
 
 const TaskForm = ({ onTaskAdded }) => {
   const [title, setTitle] = useState('');
-  const [hours, setHours] = useState(1);
+  const [description, setDescription] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsAnalyzing(true);
     try {
       await createTask({ 
         title, 
-        estimated_hours: parseFloat(hours),
+        description,
         status: "Todo" 
       });
       setTitle('');
-      setHours(1);
+      setDescription('');
       if (onTaskAdded) onTaskAdded(); 
     } catch (err) {
-      console.error("Failed to add task:", err);
+      console.error("AI Analysis failed:", err);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-      <h2 className="text-xl font-bold mb-4 text-slate-800">Quick Add Task</h2>
-      <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4">
-        <input
-          type="text"
-          placeholder="What needs to be done?"
-          className="grow p-2 border rounded-md focus:ring-2 focus:ring-slate-900 outline-none"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Hours:</label>
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+      <h2 className="text-xl font-black mb-4 text-slate-900 uppercase tracking-tight">
+        {isAnalyzing ? '✨ AI is Categorizing...' : 'Identify New Task'}
+      </h2>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
-            type="number"
-            min="1"
-            className="w-20 p-2 border rounded-md"
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
+            type="text"
+            placeholder="Task Title (e.g., Fix Memory Leak)"
+            className="p-3 border rounded-xl focus:ring-2 focus:ring-slate-900 outline-none bg-slate-50"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            disabled={isAnalyzing}
+          />
+          <input
+            type="text"
+            placeholder="Add context for AI Risk Assessment..."
+            className="p-3 border rounded-xl focus:ring-2 focus:ring-slate-900 outline-none bg-slate-50"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            disabled={isAnalyzing}
           />
         </div>
         <button
           type="submit"
-          className="bg-slate-900 text-white px-6 py-2 rounded-md hover:bg-slate-800 transition-colors"
+          disabled={isAnalyzing}
+          className={`w-full md:w-max self-end px-8 py-3 rounded-xl font-bold transition-all ${
+            isAnalyzing ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg'
+          }`}
         >
-          Add to Sprint
+          {isAnalyzing ? 'Analyzing Risks...' : 'Generate AI Ticket'}
         </button>
       </form>
     </div>
