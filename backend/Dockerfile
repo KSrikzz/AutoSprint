@@ -10,5 +10,8 @@ RUN pip install alembic
 # Copy project files
 COPY . .
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Setting up startup script for migrations
+RUN chmod +x startup.sh
+
+# Run the application using the startup script
+CMD ["./startup.sh"]

@@ -7,6 +7,7 @@ const TaskList = ({ tasks, criticalIds, totalHours, onAction }) => {
     const message = action === 'delete' 
       ? `🗑️ Permanent: Delete "${title}"?` 
       : `✅ Mark "${title}" as completed?`;
+    
     if (!window.confirm(message)) return;
 
     try {
