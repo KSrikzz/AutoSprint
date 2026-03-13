@@ -23,9 +23,9 @@
 Create a .env file in the root directory:
 ```
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_secure_password
+POSTGRES_PASSWORD=your_secure_password_here
 POSTGRES_DB=autosprint
-DATABASE_URL=postgresql://postgres:your_secure_password@db:5432/autosprint
+DATABASE_URL=postgresql://postgres:your_secure_password_here@db:5432/autosprint
 ```
 
 ### 2. Launch Services

@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Enum
 from sqlalchemy.orm import relationship
+import enum
 from database import Base
 
 class Task(Base):
@@ -20,6 +21,21 @@ class Task(Base):
         secondaryjoin="Task.id==TaskDependency.depends_on_id",
         backref="blocked_tasks"
     )
+    
+    @property
+    def prerequisites(self):
+        return self.dependencies
+
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    USER = "user"
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    role = Column(String, default=UserRole.USER)
 
 class TaskDependency(Base):
     __tablename__ = "task_dependencies"

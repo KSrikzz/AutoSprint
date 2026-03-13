@@ -5,3 +5,7 @@ sqlalchemy
 psycopg2-binary
 networkx
 httpx
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+python-multipart

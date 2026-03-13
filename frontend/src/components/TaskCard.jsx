@@ -1,42 +1,85 @@
 import React from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const TaskCard = ({ task, isCritical, handleAction }) => {
-  const isHighRisk = task.priority >= 4;
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const isDone = task.status === "Done";
+  const unsolvedDependencies = (task.dependencies || []).filter(dep => dep.status !== "Done");
+  const isBlocked = unsolvedDependencies.length > 0 && !isDone;
 
   return (
-    <div className={`p-5 rounded-xl border-2 transition-all duration-300 flex justify-between items-center 
-      ${task.status === "Done" ? 'opacity-40 grayscale bg-slate-50' : 
-        isHighRisk ? 'red-pulse border-red-200 bg-red-50' : 
-        isCritical ? 'border-orange-500 bg-orange-50 shadow-sm scale-[1.01]' : 'border-slate-100 bg-slate-50'}`}>
-      
-      <div className="grow pr-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="bg-slate-900 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">
-            {task.category || 'General'}
-          </span>
-          <h3 className={`font-bold text-lg ${task.status === "Done" ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+    <div className={`p-4 rounded-lg border transition-colors ${
+      isDone
+        ? 'bg-slate-800/20 border-slate-800 opacity-50'
+        : isCritical
+        ? 'bg-amber-500/5 border-amber-500/30'
+        : isBlocked
+        ? 'bg-slate-800/30 border-slate-700 border-dashed'
+        : 'bg-slate-800/30 border-slate-700 hover:border-slate-600'
+    }`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${
+              isDone ? 'bg-slate-800 text-slate-500'
+              : task.priority > 3 ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+              : 'bg-slate-700/50 text-slate-400'
+            }`}>
+              {task.category || "General"}
+            </span>
+            {isCritical && !isDone && (
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Critical
+              </span>
+            )}
+            {isBlocked && (
+              <span
+                title={`Blocked by: ${unsolvedDependencies.map(d => d.title).join(", ")}`}
+                className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-700/50 text-slate-500 cursor-help"
+              >
+                Blocked
+              </span>
+            )}
+          </div>
+
+          <h4 className={`text-sm font-semibold truncate ${isDone ? 'text-slate-500 line-through' : 'text-white'}`}>
             {task.title}
-          </h3>
-          {isCritical && task.status !== "Done" && (
-            <span className="bg-orange-500 text-white text-[9px] px-2 py-1 rounded font-bold uppercase tracking-tighter">Bottleneck</span>
+          </h4>
+          {task.description && (
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{task.description}</p>
           )}
         </div>
-        
-        <div className="flex gap-3 text-[10px] font-bold uppercase tracking-tight text-slate-500">
-          <span className={isHighRisk ? 'text-red-600' : ''}>PRIORITY {task.priority}</span>
-          <span>EST. {task.estimated_hours}H</span>
-        </div>
-      </div>
 
-      <div className="flex gap-2">
-        {task.status !== "Done" && (
-          <button onClick={() => handleAction('complete', task.id, task.title)} className="p-2 bg-white border border-green-200 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all shadow-sm">
-            ✓
-          </button>
-        )}
-        <button onClick={() => handleAction('delete', task.id, task.title)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 transition-all shadow-sm">
-          ✕
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-slate-500 tabular-nums">{task.estimated_hours}h</span>
+
+          <div className="flex gap-1">
+            {!isDone && (
+              <button
+                onClick={() => !isBlocked && handleAction('complete', task.id)}
+                disabled={isBlocked}
+                className={`w-7 h-7 rounded-md flex items-center justify-center text-xs transition-colors ${
+                  isBlocked
+                    ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                    : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-600/20'
+                }`}
+                title={isBlocked ? `Blocked by: ${unsolvedDependencies.map(d => d.title).join(", ")}` : "Complete"}
+              >
+                ✓
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => handleAction('delete', task.id)}
+                className="w-7 h-7 rounded-md bg-slate-800/50 text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-colors flex items-center justify-center text-xs border border-slate-700/50"
+                title="Delete"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

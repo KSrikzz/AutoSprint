@@ -1,20 +1,42 @@
 @import "tailwindcss";
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --font-primary: 'Inter', system-ui, sans-serif;
+  --bg-main: #0f172a;
+  --surface: rgba(30, 41, 59, 0.6);
+  --border: rgba(51, 65, 85, 0.5);
+  --accent: #3b82f6;
+  --accent-warm: #f59e0b;
+}
+
 body {
-  background-color: #f8fafc;
+  margin: 0;
+  font-family: var(--font-primary);
+  background-color: var(--bg-main);
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
 }
 
-.red-pulse {
-    border-color: #f87171 !important;
-    animation: intelligence-pulse 2s infinite;
+/* Card surface */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
-@keyframes intelligence-pulse {
-    0% { box-shadow: 0 0 0px rgba(239, 68, 68, 0.2); }
-    50% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
-    100% { box-shadow: 0 0 0px rgba(239, 68, 68, 0.2); }
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-.scale-\[1\.01\] {
-  transform: scale(1.01);
+/* Fade in */
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

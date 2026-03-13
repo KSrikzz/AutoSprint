@@ -1,49 +1,57 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { deleteTask, completeTask } from '../services/api';
 import TaskCard from './TaskCard';
 
 const TaskList = ({ tasks, criticalIds, totalHours, onAction }) => {
-  const handleAction = async (action, id, title) => {
-    const message = action === 'delete' 
-      ? `🗑️ Permanent: Delete "${title}"?` 
-      : `✅ Mark "${title}" as completed?`;
-    
-    if (!window.confirm(message)) return;
 
+  const idsThatArePrereqs = useMemo(() => {
+    const set = new Set();
+    tasks.forEach(t => {
+      t.dependencies?.forEach(p => set.add(p.id));
+    });
+    return set;
+  }, [tasks]);
+
+  const handleAction = async (action, id) => {
     try {
       action === 'delete' ? await deleteTask(id) : await completeTask(id);
-      if (onAction) await onAction(); 
+      if (onAction) await onAction();
     } catch (err) {
-      console.error("Action failed:", err);
+      console.error(`Action [${action}] failed:`, err);
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Execution Plan</h2>
-        <div className="text-right">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remaining Effort</span>
-          <p className="text-2xl font-black text-slate-900">{totalHours} hrs</p>
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-slate-300">Tasks</h3>
+          <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md">
+            {tasks.length}
+          </span>
         </div>
+        <span className="text-xs text-slate-500">
+          {totalHours}h total
+        </span>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         {tasks.map(task => {
-          const isTrueBottleneck = criticalIds.includes(task.id) && 
-            tasks.some(t => t.prerequisites?.some(p => p.id === task.id));
+          const isTrueBottleneck = criticalIds.includes(task.id) && idsThatArePrereqs.has(task.id);
           return (
-          <TaskCard 
-            key={task.id} 
-            task={task} 
-            isCritical={isTrueBottleneck} 
-            handleAction={handleAction} 
-          />
+            <TaskCard
+              key={task.id}
+              task={task}
+              isCritical={isTrueBottleneck}
+              handleAction={handleAction}
+            />
           );
         })}
+
         {tasks.length === 0 && (
-          <div className="text-center py-10 text-slate-400 italic border-2 border-dashed border-slate-100 rounded-xl">
-            No tasks found in sprint backlog.
+          <div className="text-center py-12 text-slate-600">
+            <p className="text-sm">No tasks yet</p>
+            <p className="text-xs mt-1">Add a task above to get started.</p>
           </div>
         )}
       </div>

@@ -15,6 +15,7 @@ class TaskCreate(TaskBase):
 
 class Task(TaskBase):
     id: int
+    dependencies: List['Task'] = []
 
     class Config:
         from_attributes = True
@@ -31,3 +32,25 @@ class TaskDependency(TaskDependencyBase):
 
     class Config:
         from_attributes = True
+
+class UserBase(BaseModel):
+    username: str
+
+class UserCreate(UserBase):
+    password: str
+
+class User(UserBase):
+    id: int
+    role: str
+
+    class Config:
+        from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    role: str
+    username: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
