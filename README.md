@@ -19,13 +19,26 @@
 + Minimum 10GB free disk space for Docker images and LLM weights.
 
 ## 🚀 Quick Start
-### 1. Configure Environment
-Create a .env file in the root directory:
+
+### 1. Configure Environment Variables
+
+Create environment configuration files using the provided .env.example structure. These variables allow the backend, database, and frontend to communicate correctly during development.
+You must create two .env files:
+
+Create a file named ```.env``` in the root directory and add the following variables:
 ```
-POSTGRES_USER=postgres
+POSTGRES_USER=admin
 POSTGRES_PASSWORD=your_secure_password_here
 POSTGRES_DB=autosprint
-DATABASE_URL=postgresql://postgres:your_secure_password_here@db:5432/autosprint
+DATABASE_URL=postgresql://admin:your_secure_password_here@db:5432/autosprint
+SECRET_KEY=your_long_random_secret_here
+ADMIN_PASSWORD=your_secure_admin_password_here
+CORS_ORIGIN=http://localhost:3009
+```
+
+Create a ```.env``` file inside the frontend directory and include:
+```
+VITE_API_URL=http://localhost:8009
 ```
 
 ### 2. Launch Services
@@ -39,5 +52,5 @@ docker-compose up --build
 Once the containers are running, you need to "pull" the model into the Ollama container:
 
 ```
-docker exec -it autosprint_ai ollama pull llama3
+docker exec -it as-ollama ollama pull llama3
 ```
