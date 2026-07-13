@@ -18,7 +18,34 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. AI Layer
+  # 2. Redis Message Broker & Cache Layer
+  redis:
+    image: redis:7-alpine
+    container_name: as-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Migration Runner (Init Container)
+  migration_init:
+    build: ./backend
+    image: autosprint-backend
+    container_name: as-migration-init
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    command: ["alembic", "upgrade", "heads"]
+
+  # 4. AI Layer
   ollama:
     image: ollama/ollama
     container_name: as-ollama
@@ -28,7 +55,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
-  # 3. Backend Layer
+  # 5. Backend Layer
   backend:
     build: ./backend
     image: autosprint-backend
@@ -38,11 +65,16 @@ services:
       - "8009:8000"
     depends_on:
       db:
-        condition: service_healthy 
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration_init:
+        condition: service_completed_successfully
       ollama:
         condition: service_started
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434/api/generate}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:latest}
       - AI_PROVIDER=${AI_PROVIDER:-ollama}
@@ -56,7 +88,37 @@ services:
     volumes:
       - ./backend:/app
 
-  # 4. Frontend Layer
+  # 6. Celery Worker Layer
+  celery_worker:
+    build: ./backend
+    image: autosprint-backend
+    container_name: as-celery-worker
+    restart: always
+    command: ["celery", "-A", "celery_app.celery_app", "worker", "--loglevel=info"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration_init:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_started
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434/api/generate}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:latest}
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.1-8b-instant}
+      - SECRET_KEY=${SECRET_KEY}
+    volumes:
+      - ./backend:/app
+
+  # 7. Frontend Layer
   frontend:
     build: ./frontend
     image: autosprint-frontend
@@ -73,4 +135,5 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   ollama_data:

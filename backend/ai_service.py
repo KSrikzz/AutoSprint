@@ -1,11 +1,12 @@
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional
+import enum
 import httpx
 import json
 import os
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
-
 
 AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama").lower()  # ollama, openai, groq
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434/api/generate")
@@ -25,6 +26,66 @@ ALLOWED_CATEGORIES = [
 ]
 
 ALLOWED_RISKS = ["security", "performance", "scalability", "data_loss", "breaking_change"]
+
+
+class AIAnalysisResponse(BaseModel):
+    category: str = Field(default="Backend")
+    priority: int = Field(default=3, ge=1, le=5)
+    estimated_hours: int = Field(default=4, ge=1)
+    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
+    risk_flags: List[str] = Field(default_factory=list)
+    suggested_subtasks: List[str] = Field(default_factory=list)
+    rationale: str = Field(default="", max_length=500)
+
+    @field_validator("category", mode="before")
+    def validate_category(cls, value):
+        if isinstance(value, str):
+            matched = next((c for c in ALLOWED_CATEGORIES if c.lower() == value.strip().lower()), None)
+            if matched:
+                return matched
+        return "Backend"
+
+    @field_validator("priority", mode="before")
+    def validate_priority(cls, value):
+        try:
+            val = int(value)
+            return max(1, min(5, val))
+        except (ValueError, TypeError):
+            return 3
+
+    @field_validator("estimated_hours", mode="before")
+    def validate_hours(cls, value):
+        try:
+            val = int(value)
+            return max(1, val)
+        except (ValueError, TypeError):
+            return 4
+
+    @field_validator("confidence_score", mode="before")
+    def validate_confidence(cls, value):
+        try:
+            val = float(value)
+            return max(0.0, min(1.0, val))
+        except (ValueError, TypeError):
+            return 0.5
+
+    @field_validator("risk_flags", mode="before")
+    def validate_risks(cls, value):
+        if isinstance(value, list):
+            return [r for r in value if isinstance(r, str) and r.lower() in ALLOWED_RISKS]
+        return []
+
+    @field_validator("suggested_subtasks", mode="before")
+    def validate_subtasks(cls, value):
+        if isinstance(value, list):
+            return [s.strip() for s in value if isinstance(s, str) and s.strip()][:6]
+        return []
+
+    @field_validator("rationale", mode="before")
+    def validate_rationale(cls, value):
+        if value is None:
+            return ""
+        return str(value)[:500]
 
 
 def build_prompt(title: str, description: str = "") -> str:
@@ -178,58 +239,24 @@ PROVIDERS = {
 
 
 def parse_ai_response(raw: str, fallback: dict) -> dict:
-    """Parse and validate AI JSON response, falling back gracefully on any field."""
+    """Parse and validate AI JSON response using strict Pydantic model validation."""
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("AI Response JSON Error: %s", raw[:200])
+        validated_model = AIAnalysisResponse.model_validate_json(raw)
+        return {
+            "category": validated_model.category,
+            "priority": validated_model.priority,
+            "estimated_hours": validated_model.estimated_hours,
+            "confidence_score": validated_model.confidence_score,
+            "risk_flags": json.dumps(validated_model.risk_flags),
+            "suggested_subtasks": json.dumps(validated_model.suggested_subtasks),
+            "rationale": validated_model.rationale,
+        }
+    except Exception as err:
+        logger.warning("Pydantic AI JSON Validation Error: %s | Raw response: %s", err, raw[:200])
         return fallback
 
-    result = {}
 
-    cat = parsed.get("category", "").strip()
-    matched_cat = next((c for c in ALLOWED_CATEGORIES if c.lower() == cat.lower()), None)
-    result["category"] = matched_cat or fallback["category"]
-
-    try:
-        priority = int(parsed.get("priority", 3))
-        result["priority"] = priority if 1 <= priority <= 5 else 3
-    except (ValueError, TypeError):
-        result["priority"] = 3
-
-    try:
-        hours = int(parsed.get("estimated_hours", 4))
-        result["estimated_hours"] = max(1, hours)
-    except (ValueError, TypeError):
-        result["estimated_hours"] = 4
-
-    try:
-        conf = float(parsed.get("confidence_score", 0.5))
-        result["confidence_score"] = max(0.0, min(1.0, conf))
-    except (ValueError, TypeError):
-        result["confidence_score"] = 0.5
-
-    risk_raw = parsed.get("risk_flags", [])
-    if isinstance(risk_raw, list):
-        validated_risks = [r for r in risk_raw if isinstance(r, str) and r.lower() in ALLOWED_RISKS]
-        result["risk_flags"] = json.dumps(validated_risks)
-    else:
-        result["risk_flags"] = json.dumps([])
-
-    subtasks_raw = parsed.get("suggested_subtasks", [])
-    if isinstance(subtasks_raw, list):
-        validated_subtasks = [s for s in subtasks_raw if isinstance(s, str) and len(s.strip()) > 0][:6]
-        result["suggested_subtasks"] = json.dumps(validated_subtasks)
-    else:
-        result["suggested_subtasks"] = json.dumps([])
-
-    rationale = parsed.get("rationale", "")
-    result["rationale"] = str(rationale)[:500] if rationale else ""
-
-    return result
-
-
-async def analyze_task_ai(title: str, description: str = ""):
+async def analyze_task_ai(title: str, description: str = "") -> dict:
     """Analyze a task using the configured AI provider. Returns a dict with
     category, priority, estimated_hours, confidence_score, risk_flags,
     suggested_subtasks, and rationale."""

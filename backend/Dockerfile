@@ -15,5 +15,5 @@ RUN pip install alembic
 # Copy project files
 COPY . .
 
-# Run migrations on startup, then start the application
-CMD ["sh", "-c", "alembic upgrade heads && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
+# Start the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

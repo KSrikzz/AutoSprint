@@ -12,3 +12,5 @@ python-multipart
 jinja2
 weasyprint
 sse-starlette
+celery
+redis

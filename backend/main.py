@@ -314,6 +314,8 @@ def get_project_users(
     return [{"id": u.id, "username": u.username, "role": u.role} for u in users]
 
 
+from celery_app import analyze_task_background
+
 @app.post("/tasks/", response_model=schemas.Task)
 async def create_task(
     task: schemas.TaskCreate, 
@@ -321,18 +323,12 @@ async def create_task(
     current_user: models.User = Depends(require_developer_or_admin)
 ):
     check_project_access(db, current_user, task.project_id)
-    ai_suggestions = await analyze_task_ai(task.title, task.description or "")
     
     task_data = task.model_dump()
-    if not task_data.get("estimated_hours") or task_data.get("estimated_hours") == 1:
-        task_data["estimated_hours"] = ai_suggestions.get("estimated_hours", 1)
-    task_data["category"] = ai_suggestions.get("category", "General")
-    task_data["priority"] = ai_suggestions.get("priority", 1)
-    
-    task_data["confidence_score"] = ai_suggestions.get("confidence_score")
-    task_data["risk_flags"] = ai_suggestions.get("risk_flags")
-    task_data["ai_rationale"] = ai_suggestions.get("rationale", "")
-    task_data["suggested_subtasks"] = ai_suggestions.get("suggested_subtasks")
+    if not task_data.get("estimated_hours"):
+        task_data["estimated_hours"] = 4
+    task_data["category"] = "Backend"
+    task_data["priority"] = 3
 
     db_task = models.Task(**task_data)
     db.add(db_task)
@@ -344,7 +340,31 @@ async def create_task(
     if db_task.assigned_to_id:
         notify_task_assigned(db, db_task, db_task.assigned_to_id, current_user.username)
 
+    # Offload AI analysis to Celery worker asynchronously
+    analyze_task_background.delay(db_task.id)
+
     return db_task
+
+@app.post("/tasks/batch-analyze", status_code=status.HTTP_202_ACCEPTED)
+async def batch_analyze_tasks(
+    task_ids: List[int],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_developer_or_admin)
+):
+    """Enqueues 500+ tasks for asynchronous background AI analysis, returning 202 Accepted immediately."""
+    tasks = db.query(models.Task).filter(models.Task.id.in_(task_ids)).all()
+    if not tasks:
+        raise HTTPException(status_code=404, detail="No valid tasks found for batch analysis")
+
+    for task in tasks:
+        check_project_access(db, current_user, task.project_id)
+        analyze_task_background.delay(task.id)
+
+    return {
+        "status": "accepted",
+        "message": f"Enqueued {len(tasks)} tasks for asynchronous AI background analysis.",
+        "enqueued_task_ids": [t.id for t in tasks]
+    }
 
 @app.get("/tasks/", response_model=List[schemas.Task])
 def read_tasks(
