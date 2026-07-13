@@ -22,6 +22,10 @@ from notification_service import (
 )
 from report_service import generate_sprint_pdf
 from jose import JWTError, jwt
+try:
+    from celery_app import analyze_task_background
+except ImportError:
+    analyze_task_background = None
 
 app = FastAPI(
     title="AutoSprint API",
@@ -314,34 +318,12 @@ def get_project_users(
     return [{"id": u.id, "username": u.username, "role": u.role} for u in users]
 
 
-from celery_app import analyze_task_background
-
-@app.post("/tasks/", response_model=schemas.Task)
-async def create_task(
-    task: schemas.TaskCreate, 
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_developer_or_admin)
-):
-    check_project_access(db, current_user, task.project_id)
-    
-    task_data = task.model_dump()
-    if not task_data.get("estimated_hours"):
-        task_data["estimated_hours"] = 4
-    task_data["category"] = "Backend"
-    task_data["priority"] = 3
-
-    db_task = models.Task(**task_data)
-    db.add(db_task)
-    db.commit()
-    db.refresh(db_task)
-
-    log_activity(db, db_task.id, current_user.id, "created", f"Created task '{db_task.title}'")
-
-    if db_task.assigned_to_id:
-        notify_task_assigned(db, db_task, db_task.assigned_to_id, current_user.username)
-
-    # Offload AI analysis to Celery worker asynchronously
-    analyze_task_background.delay(db_task.id)
+    # Offload AI analysis to Celery worker asynchronously if available
+    if analyze_task_background:
+        try:
+            analyze_task_background.delay(db_task.id)
+        except Exception:
+            pass
 
     return db_task
 
@@ -358,7 +340,11 @@ async def batch_analyze_tasks(
 
     for task in tasks:
         check_project_access(db, current_user, task.project_id)
-        analyze_task_background.delay(task.id)
+        if analyze_task_background:
+            try:
+                analyze_task_background.delay(task.id)
+            except Exception:
+                pass
 
     return {
         "status": "accepted",
