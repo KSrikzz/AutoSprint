@@ -22,10 +22,7 @@ from notification_service import (
 )
 from report_service import generate_sprint_pdf
 from jose import JWTError, jwt
-try:
-    from celery_app import analyze_task_background
-except ImportError:
-    analyze_task_background = None
+from celery_app import analyze_task_background
 
 app = FastAPI(
     title="AutoSprint API",
@@ -318,12 +315,8 @@ def get_project_users(
     return [{"id": u.id, "username": u.username, "role": u.role} for u in users]
 
 
-    # Offload AI analysis to Celery worker asynchronously if available
-    if analyze_task_background:
-        try:
-            analyze_task_background.delay(db_task.id)
-        except Exception:
-            pass
+    # Offload AI analysis to Celery worker asynchronously
+    analyze_task_background.delay(db_task.id)
 
     return db_task
 
@@ -340,11 +333,7 @@ async def batch_analyze_tasks(
 
     for task in tasks:
         check_project_access(db, current_user, task.project_id)
-        if analyze_task_background:
-            try:
-                analyze_task_background.delay(task.id)
-            except Exception:
-                pass
+        analyze_task_background.delay(task.id)
 
     return {
         "status": "accepted",
